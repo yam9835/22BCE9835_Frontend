@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import axios from "axios";
 import { GetServerSideProps } from "next";
@@ -14,18 +14,19 @@ interface SearchPageProps {
 
 export default function SearchPage({ initialResults }: SearchPageProps) {
   const router = useRouter();
-  const [query, setQuery] = useState(router.query.query || "");
+  const [query, setQuery] = useState<string>(router.query.query as string || "");
   const [filters, setFilters] = useState({
-    owner: router.query.owner || "",
-    lawFirm: router.query.lawFirm || "",
-    attorney: router.query.attorney || "",
-    status: router.query.status || "",
+    owner: (router.query.owner as string) || "",
+    lawFirm: (router.query.lawFirm as string) || "",
+    attorney: (router.query.attorney as string) || "",
+    status: (router.query.status as string) || "",
   });
   const [results, setResults] = useState<Trademark[]>(initialResults);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchResults = async (searchParams: any) => {
+  // Fetch results when search query changes
+  const fetchResults = useCallback(async (searchParams: any) => {
     setLoading(true);
     setError(null);
     try {
@@ -33,13 +34,20 @@ export default function SearchPage({ initialResults }: SearchPageProps) {
       setResults(response.data);
     } catch (err) {
       setError("Error fetching data");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    if (router.isReady) {
+      fetchResults(router.query);
+    }
+  }, [router.query, router.isReady, fetchResults]);
 
   const handleSearch = () => {
     const searchParams = { query, ...filters };
-    router.push({ pathname: "/search", query: searchParams });
+    router.push({ pathname: "/search", query: searchParams }, undefined, { shallow: true });
     fetchResults(searchParams);
   };
 
@@ -74,10 +82,11 @@ export default function SearchPage({ initialResults }: SearchPageProps) {
   );
 }
 
+// Server-Side Rendering (SSR) for initial data fetch
 export const getServerSideProps: GetServerSideProps = async (context) => {
   try {
     const response = await axios.get("https://api.trademarkia.com/search", { params: context.query });
-    return { props: { initialResults: response.data } };
+    return { props: { initialResults: response.data || [] } };
   } catch (error) {
     return { props: { initialResults: [] } };
   }
