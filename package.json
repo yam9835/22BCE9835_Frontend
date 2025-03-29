@@ -1,0 +1,84 @@
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import axios from "axios";
+import { GetServerSideProps } from "next";
+
+interface Trademark {
+  id: string;
+  name: string;
+}
+
+interface SearchPageProps {
+  initialResults: Trademark[];
+}
+
+export default function SearchPage({ initialResults }: SearchPageProps) {
+  const router = useRouter();
+  const [query, setQuery] = useState(router.query.query || "");
+  const [filters, setFilters] = useState({
+    owner: router.query.owner || "",
+    lawFirm: router.query.lawFirm || "",
+    attorney: router.query.attorney || "",
+    status: router.query.status || "",
+  });
+  const [results, setResults] = useState<Trademark[]>(initialResults);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchResults = async (searchParams: any) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await axios.get("https://api.trademarkia.com/search", { params: searchParams });
+      setResults(response.data);
+    } catch (err) {
+      setError("Error fetching data");
+    }
+    setLoading(false);
+  };
+
+  const handleSearch = () => {
+    const searchParams = { query, ...filters };
+    router.push({ pathname: "/search", query: searchParams });
+    fetchResults(searchParams);
+  };
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      <input
+        type="text"
+        placeholder="Search trademarks..."
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        className="w-full p-2 border rounded"
+      />
+      <div className="grid grid-cols-2 gap-4 mt-2">
+        <input type="text" placeholder="Owner" value={filters.owner} onChange={(e) => setFilters({ ...filters, owner: e.target.value })} className="p-2 border rounded" />
+        <input type="text" placeholder="Law Firm" value={filters.lawFirm} onChange={(e) => setFilters({ ...filters, lawFirm: e.target.value })} className="p-2 border rounded" />
+        <input type="text" placeholder="Attorney" value={filters.attorney} onChange={(e) => setFilters({ ...filters, attorney: e.target.value })} className="p-2 border rounded" />
+        <input type="text" placeholder="Status" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="p-2 border rounded" />
+      </div>
+      <button onClick={handleSearch} className="p-2 bg-blue-500 text-white rounded mt-2">
+        Search
+      </button>
+      {loading && <p>Loading...</p>}
+      {error && <p className="text-red-500">{error}</p>}
+      <div>
+        {results.length > 0 ? (
+          results.map((item) => <div key={item.id}>{item.name}</div>)
+        ) : (
+          !loading && <p>No results found</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps = async (context) => {
+  try {
+    const response = await axios.get("https://api.trademarkia.com/search", { params: context.query });
+    return { props: { initialResults: response.data } };
+  } catch (error) {
+    return { props: { initialResults: [] } };
+  }
+};
